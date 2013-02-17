@@ -20,7 +20,7 @@ deriveRules words n = buildRules words n $ initRules $ take n words
 initRules :: [String] -> WordMap
 initRules [] = Map.empty
 initRules words = appendRule start (last words) $ initRules start
-                  where start = take (length words - 1) words
+                  where start = init words
 
 -- | This builds the other rules, those that are derived from a full sequence of n previous words.
 buildRules :: [String] -> Int -> WordMap ->  WordMap
@@ -29,7 +29,7 @@ buildRules words n map
     | otherwise        = map
 
 appendRule :: [String] -> String -> WordMap -> WordMap
-appendRule context word map = Map.alter (appendWord word) context map
+appendRule context word = Map.alter (appendWord word) context
 
 appendWord :: String -> Maybe (Seq String) -> Maybe (Seq String)
 appendWord word Nothing      = Just $ Seq.singleton word
