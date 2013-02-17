@@ -1,9 +1,10 @@
+module Markov(markov) where
+
 import Data.Map(Map)
 import qualified Data.Map as Map(alter, empty, lookup)
 import Data.Sequence(Seq, (|>))
 import qualified Data.Sequence as Seq(index, length, singleton)
-import System.Environment(getArgs)
-import System.Random(RandomGen, getStdGen, randomR)
+import System.Random(RandomGen, randomR)
 
 type ChainRules a = Map [a] (Seq a)
 
@@ -52,16 +53,7 @@ nextValue output rules rng n = case Map.lookup context rules of
                                                where (i, rng') = randomR (0, Seq.length seq - 1) rng
                                where context = drop (length output - n) output
 
-
-parody :: (RandomGen r) => String -> r -> Int -> String
-parody input rng n = unwords . fst $ buildOutput [] rules rng n
-                     where rules = deriveRules (words input) n
-
-
--- | The main function expects two arguments, the path of an input text file and the number of previous words to
---   consider when constructing the chain.
-main :: IO ()
-main = do (inputPath:n:_) <- getArgs
-          input <- readFile inputPath
-          rng <- getStdGen
-          print $ parody input rng $ read n
+-- | Build a Markov Chain of order n from the input sequence.
+markov :: (RandomGen r, Ord a) => [a] -> r -> Int -> [a]
+markov input rng n = fst $ buildOutput [] rules rng n
+                     where rules = deriveRules input n
