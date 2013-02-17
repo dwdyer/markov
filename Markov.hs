@@ -5,54 +5,56 @@ import qualified Data.Sequence as Seq(index, length, singleton)
 import System.Environment(getArgs)
 import System.Random(RandomGen, getStdGen, randomR)
 
-type WordMap = Map [String] (Seq String)
+type ChainRules a = Map [a] (Seq a)
 
--- | Take a list of words (the source text) and generate Markov mappings of order n, where n is the number
---   previous words to consider when determining the next word.  The map key is a list of words (of length <= n)
---   and the value is a sequence of valid next words (may contain duplicates for words that are more likely to
+-- | Take a list of values (the input data) and generate Markov mappings of order n, where n is the number
+--   previous values to consider when determining the next value.  The map key is a list (of length <= n) of values
+--   and the entry is a sequence of valid next values (may contain duplicates for values that are more likely to
 --   occur than others).
-deriveRules :: [String] -> Int -> WordMap
-deriveRules words n = buildRules words n $ initRules $ take n words
+deriveRules :: Ord a => [a] -> Int -> ChainRules a
+deriveRules input n = buildRules input n $ initRules $ take n input
 
--- | As well has having rules for each sequence of n words, we need a few other rules for shorter sequences
---   (with lengths from 0 to n-1) at the start of the text so that we can start building the output from an empty
---   list of words.
-initRules :: [String] -> WordMap
+-- | As well has having rules for each sequence of n values, we need a few other rules for shorter sequences
+--   (with lengths from 0 to n-1) at the start so that we can start building the output from an empty list.
+initRules :: Ord a => [a] -> ChainRules a
 initRules [] = Map.empty
-initRules words = appendRule start (last words) $ initRules start
-                  where start = init words
+initRules input = updateRule start (last input) $ initRules start
+                  where start = init input
 
--- | This builds the other rules, those that are derived from a full sequence of n previous words.
-buildRules :: [String] -> Int -> WordMap ->  WordMap
-buildRules words n map
-    | length words > n = buildRules (tail words) n $ appendRule (take n words) (words !! n) map
-    | otherwise        = map
+-- | This builds the other rules, those that are derived from a full sequence of n previous values.
+buildRules :: Ord a => [a] -> Int -> ChainRules a ->  ChainRules a
+buildRules input n rules
+    | length input > n = buildRules (tail input) n $ updateRule (take n input) (input !! n) rules
+    | otherwise        = rules
 
-appendRule :: [String] -> String -> WordMap -> WordMap
-appendRule context word = Map.alter (appendWord word) context
+-- | Creates a new rule for a given context or updates the existing rule by adding to the sequence of valid
+--   alternatives for that context.
+updateRule :: Ord a => [a] -> a -> ChainRules a -> ChainRules a
+updateRule context value = Map.alter (addToSequence value) context
 
-appendWord :: String -> Maybe (Seq String) -> Maybe (Seq String)
-appendWord word Nothing      = Just $ Seq.singleton word
-appendWord word (Just words) = Just $ words |> word
+-- | Add a value to the sequence of valid alternatives for a given context.  Creates the sequence if it doesn't exist.
+addToSequence :: Ord a => a -> Maybe (Seq a) -> Maybe (Seq a)
+addToSequence value Nothing       = Just $ Seq.singleton value
+addToSequence value (Just values) = Just $ values |> value
 
 
--- | The next word is determined by the most recent n words and is randomly selected from the sequence of valid
---   alternatives in the Markov mappings.
-addNextWord :: (RandomGen r) => [String] -> WordMap -> r -> Int -> ([String], r)
-addNextWord words map rng n = case nextWord words map rng n of
-                                  (Nothing, rng') -> (words, rng')
-                                  (Just w, rng') -> addNextWord (words ++ [w]) map rng' n
+-- | The next value is determined by the most recent n values (the context) and is randomly selected from the sequence
+--   of valid alternatives in the Markov mappings.
+buildOutput :: (RandomGen r, Ord a) => [a] -> ChainRules a -> r -> Int -> ([a], r)
+buildOutput output rules rng n = case nextValue output rules rng n of
+                                     (Nothing, rng') -> (output, rng')
+                                     (Just value, rng') -> buildOutput (output ++ [value]) rules rng' n
 
-nextWord :: (RandomGen r) => [String] -> WordMap -> r -> Int -> (Maybe String, r)
-nextWord words map rng n = case Map.lookup key map of
-                               Nothing  -> (Nothing, rng)
-                               Just seq -> (Just $ Seq.index seq i, rng')
-                                           where (i, rng') = randomR (0, Seq.length seq - 1) rng
-                           where key = drop (length words - n) words
+nextValue :: (RandomGen r, Ord a) => [a] -> ChainRules a -> r -> Int -> (Maybe a, r)
+nextValue output rules rng n = case Map.lookup context rules of
+                                   Nothing  -> (Nothing, rng)
+                                   Just seq -> (Just $ Seq.index seq i, rng')
+                                               where (i, rng') = randomR (0, Seq.length seq - 1) rng
+                               where context = drop (length output - n) output
 
 
 parody :: (RandomGen r) => String -> r -> Int -> String
-parody input rng n = unwords . fst $ addNextWord [] rules rng n
+parody input rng n = unwords . fst $ buildOutput [] rules rng n
                      where rules = deriveRules (words input) n
 
 
