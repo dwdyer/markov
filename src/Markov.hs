@@ -12,11 +12,11 @@ type ChainRules a = Map [a] (Seq a)
 --   previous values to consider when determining the next value.  The map key is a list (of length <= n) of values
 --   and the entry is a sequence of valid next values (may contain duplicates for values that are more likely to
 --   occur than others).
-deriveRules :: Ord a => Int -> [a] -> ChainRules a
-deriveRules n input = buildRules n input $ initRules $ take n input
+deriveRules :: Ord a => Int -> [[a]] -> ChainRules a
+deriveRules n inputs = Map.unionsWith (><) $ map (deriveRules' n) inputs
 
-deriveRulesMany :: Ord a => Int -> [[a]] -> ChainRules a
-deriveRulesMany n inputs = Map.unionsWith (><) $ map (deriveRules n) inputs
+deriveRules' :: Ord a => Int -> [a] -> ChainRules a
+deriveRules' n input = buildRules n input $ initRules $ take n input
 
 -- | As well has having rules for each sequence of n values, we need a few other rules for shorter sequences
 --   (with lengths from 0 to n-1) at the start so that we can start building the output from an empty list.
@@ -50,12 +50,12 @@ buildOutput output rules rng n = case nextValue output rules rng n of
 
 nextValue :: (RandomGen r, Ord a) => [a] -> ChainRules a -> r -> Int -> (Maybe a, r)
 nextValue output rules rng n = case Map.lookup context rules of
-                                   Nothing  -> (Nothing, rng)
-                                   Just seq -> (Just $ Seq.index seq i, rng')
-                                               where (i, rng') = randomR (0, Seq.length seq - 1) rng
+                                   Nothing -> (Nothing, rng)
+                                   Just sq -> (Just $ Seq.index sq i, rng')
+                                                     where (i, rng') = randomR (0, Seq.length sq - 1) rng
                                where context = drop (length output - n) output
 
 -- | Build a Markov Chain of order n from the input sequence.
 markov :: (RandomGen r, Ord a) => [[a]] -> r -> Int -> ([a], r)
 markov input rng n = buildOutput [] rules rng n
-                     where rules = deriveRulesMany n input
+                     where rules = deriveRules n input
