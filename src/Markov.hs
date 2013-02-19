@@ -18,7 +18,7 @@ deriveRules :: Ord a => Int -> [[a]] -> ChainRules a
 deriveRules n inputs = Map.unionsWith (><) $ map (deriveRules' n) inputs
 
 deriveRules' :: Ord a => Int -> [a] -> ChainRules a
-deriveRules' n input = buildRules n input $ initRules $ take n input
+deriveRules' n input = buildRules n input . initRules $ take n input
 
 -- | As well has having rules for each sequence of n values, we need a few other rules for shorter sequences
 --   (with lengths from 0 to n-1) at the start so that we can start building the output from an empty list.
