@@ -1,10 +1,12 @@
 module Markov(markov) where
 
+import Control.Monad.State(State, StateT(..))
+import Data.Functor.Identity(Identity(..))
 import Data.Map(Map)
 import qualified Data.Map as Map(alter, empty, lookup, unionsWith)
 import Data.Sequence(Seq, (|>), (><))
 import qualified Data.Sequence as Seq(index, length, singleton)
-import System.Random(RandomGen, randomR)
+import System.Random(Random, RandomGen, randomR)
 
 type ChainRules a = Map [a] (Seq a)
 
@@ -43,19 +45,23 @@ addToSequence value (Just values) = Just $ values |> value
 
 -- | The next value is determined by the most recent n values (the context) and is randomly selected from the sequence
 --   of valid alternatives in the Markov mappings.
-buildOutput :: (RandomGen r, Ord a) => [a] -> ChainRules a -> r -> Int -> ([a], r)
-buildOutput output rules rng n = case nextValue output rules rng n of
-                                     (Nothing, rng') -> (output, rng')
-                                     (Just value, rng') -> buildOutput (output ++ [value]) rules rng' n
+buildOutput :: (RandomGen r, Ord a) => Int -> [a] -> ChainRules a -> State r [a]
+buildOutput n output rules = do next <- nextValue n output rules
+                                case next of
+                                    Nothing    -> return output
+                                    Just value -> buildOutput n (output ++ [value]) rules
 
-nextValue :: (RandomGen r, Ord a) => [a] -> ChainRules a -> r -> Int -> (Maybe a, r)
-nextValue output rules rng n = case Map.lookup context rules of
-                                   Nothing -> (Nothing, rng)
-                                   Just sq -> (Just $ Seq.index sq i, rng')
-                                                     where (i, rng') = randomR (0, Seq.length sq - 1) rng
-                               where context = drop (length output - n) output
+nextValue :: (RandomGen r, Ord a) => Int -> [a] -> ChainRules a -> State r (Maybe a)
+nextValue n output rules = case Map.lookup context rules of 
+                               Nothing -> return Nothing
+                               Just sq -> do i <- randomRSt (0, Seq.length sq - 1)
+                                             return . Just $ Seq.index sq i
+                           where context = drop (length output - n) output
+
+-- | Stateful version of the randomR function.
+randomRSt :: (RandomGen r, Random a) => (a, a) -> State r a
+randomRSt (a, b) = StateT $ Identity . randomR (a, b)
 
 -- | Build a Markov Chain of order n from the input sequence.
-markov :: (RandomGen r, Ord a) => [[a]] -> r -> Int -> ([a], r)
-markov input rng n = buildOutput [] rules rng n
-                     where rules = deriveRules n input
+markov :: (RandomGen r, Ord a) => [[a]] -> Int -> State r [a]
+markov input n = buildOutput n [] $ deriveRules n input

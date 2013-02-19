@@ -1,5 +1,6 @@
 module Main where
 
+import Control.Monad.State(runState)
 import Parody(parody)
 import System.Environment(getArgs)
 import System.Random(getStdGen, setStdGen)
@@ -10,6 +11,6 @@ main :: IO ()
 main = do (inputPath:n:_) <- getArgs
           input <- readFile inputPath
           rng <- getStdGen
-          let (output, rng') = parody (lines input) rng $ read n
+          let (output, rng') = runState (parody (lines input) $ read n) rng
           setStdGen rng'
           print output

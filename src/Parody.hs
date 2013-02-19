@@ -1,8 +1,9 @@
 module Parody(parody) where
 
+import Control.Monad.State(State)
 import Markov(markov)
 import System.Random(RandomGen)
 
-parody :: (RandomGen r) => [String] -> r -> Int -> (String, r)
-parody input rng n = (unwords output, rng')
-                     where (output, rng') = markov (map words input) rng n
+parody :: (RandomGen r) => [String] -> Int -> State r String
+parody input n = do output <- markov (map words input) n
+                    return $ unwords output
